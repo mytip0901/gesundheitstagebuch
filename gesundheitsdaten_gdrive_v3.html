@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gesundheitstagebuch</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#f5f5f5;min-height:100vh}
+.container{max-width:900px;margin:0 auto;padding:1rem}
+h1{font-size:20px;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:8px}
+h3{font-size:15px;font-weight:600;margin-bottom:.75rem}
+.tabs{display:flex;gap:4px;margin-bottom:1.5rem;border-bottom:1px solid #e0e0e0;padding-bottom:0}
+.tab{padding:8px 16px;font-size:14px;cursor:pointer;border:none;background:transparent;color:#666;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:600}
+.view{display:none}.view.active{display:block}
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:1rem}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.field input,.field select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1a1a1a}
+.field input:focus,.field select:focus{outline:none;border-color:#4285f4}
+.field-wide{grid-column:1/-1}
+.btn{padding:8px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:14px;color:#1a1a1a;transition:all .15s}
+.btn:hover{background:#f5f5f5}
+.btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.btn-primary:hover{background:#333}
+.btn-google{background:#4285f4;color:#fff;border-color:#4285f4;display:inline-flex;align-items:center;gap:8px}
+.btn-google:hover{background:#3367d6}
+.btn-danger{border-color:#e53e3e;color:#e53e3e}
+.btn-danger:hover{background:#fff5f5}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600}
+.ok{background:#d4edda;color:#155724}
+.warn{background:#fff3cd;color:#856404}
+.crit{background:#f8d7da;color:#721c24}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;font-size:12px;font-weight:600;color:#666;border-bottom:1px solid #e0e0e0;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.table-wrap{overflow-x:auto}
+.day-header td{background:#f8f8f8;font-weight:600;font-size:13px;padding:6px 10px;border-top:1px solid #e0e0e0}
+.day-row td:first-child{padding-left:18px;color:#666}
+.toast{position:fixed;bottom:20px;right:20px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;max-width:340px;word-break:break-word;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.toast.show{opacity:1}
+.empty{text-align:center;padding:2rem;color:#999;font-size:14px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem}
+.stat{background:#f8f8f8;border-radius:8px;padding:12px;text-align:center;border:1px solid #e0e0e0}
+.stat-label{font-size:12px;color:#666;margin-bottom:4px}
+.stat-val{font-size:20px;font-weight:600}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:#666}
+.legend span{display:flex;align-items:center;gap:4px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.dot-ok{background:#22c55e}.dot-warn{background:#f59e0b}.dot-crit{background:#ef4444}
+#auth-bar{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 16px;margin-bottom:1rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+#auth-status{flex:1;font-size:13px;color:#666}
+.clr-ok{color:#155724}.clr-warn{color:#856404}.clr-crit{color:#721c24}
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🩺 Gesundheitstagebuch</h1>
+
+<div id="auth-bar">
+  <span id="auth-status">⏳ Google API wird geladen...</span>
+  <button class="btn btn-google" id="btn-login" onclick="googleLogin()" style="display:none">
+    <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg>
+    Mit Google anmelden
+  </button>
+  <button class="btn" id="btn-sync" onclick="syncDrive()" style="display:none">🔄 Sync</button>
+  <button class="btn" id="btn-logout" onclick="googleLogout()" style="display:none">Abmelden</button>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('erfassen',this)">+ Erfassen</button>
+  <button class="tab" onclick="showTab('verlauf',this)">📈 Verlauf</button>
+  <button class="tab" onclick="showTab('export',this)">⬇ Export</button>
+</div>
+
+<div id="tab-erfassen" class="view active">
+  <div class="card">
+    <h3>Neue Messung</h3>
+    <div class="form-grid">
+      <div class="field"><label>Datum</label><input type="date" id="f-datum"></div>
+      <div class="field"><label>Uhrzeit</label><input type="time" id="f-uhrzeit"></div>
+      <div class="field"><label>RR systolisch (mmHg)</label><input type="number" id="f-bpS" placeholder="z.B. 120" min="60" max="250"></div>
+      <div class="field"><label>RR diastolisch (mmHg)</label><input type="number" id="f-bpD" placeholder="z.B. 80" min="40" max="150"></div>
+      <div class="field"><label>Puls (bpm)</label><input type="number" id="f-puls" placeholder="z.B. 72" min="30" max="220"></div>
+      <div class="field"><label>SpO₂ (%)</label><input type="number" id="f-spo2" placeholder="z.B. 98" min="70" max="100"></div>
+      <div class="field"><label>Temperatur (°C)</label><input type="number" id="f-temp" step="0.1" placeholder="z.B. 36.8" min="34" max="43"></div>
+      <div class="field"><label>Stuhlgang</label><select id="f-stuhl"><option value="">— bitte wählen —</option><option value="Ja">Ja</option><option value="Nein">Nein</option></select></div>
+      <div class="field field-wide"><label>Notizen (optional)</label><input type="text" id="f-notiz" placeholder="Freitext..."></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="speichern()">💾 Speichern</button>
+      <button class="btn" onclick="felderLeeren()">↺ Leeren</button>
+    </div>
+  </div>
+  <div id="letzte-eintraege"></div>
+</div>
+
+<div id="tab-verlauf" class="view">
+  <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem">
+    <div class="field" style="flex:0 0 auto"><label>Von</label><input type="date" id="v-von" style="width:150px" onchange="renderVerlauf()"></div>
+    <div class="field" style="flex:0 0 auto"><label>Bis</label><input type="date" id="v-bis" style="width:150px" onchange="renderVerlauf()"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:2px">
+      <button class="btn" onclick="setRange(7)">7 Tage</button>
+      <button class="btn" onclick="setRange(14)">14 Tage</button>
+      <button class="btn" onclick="setRange(30)">30 Tage</button>
+      <button class="btn" onclick="setRange(0)">Alle</button>
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot dot-ok"></span> Normalbereich</span>
+    <span><span class="dot dot-warn"></span> Erhöht</span>
+    <span><span class="dot dot-crit"></span> Kritisch</span>
+  </div>
+  <div id="verlauf-inhalt"><div class="empty">Noch keine Daten geladen.</div></div>
+</div>
+
+<div id="tab-export" class="view">
+  <div class="card">
+    <h3>📊 Excel-Export (CSV)</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:1rem">Alle Einträge als CSV-Datei, direkt in Excel öffenbar.</p>
+    <button class="btn btn-primary" onclick="exportCSV()">⬇ CSV herunterladen</button>
+  </div>
+  <div class="card">
+    <h3>📄 PDF-Export</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:1rem">Druckfähige Übersicht aller Messwerte.</p>
+    <button class="btn btn-primary" onclick="exportPDF()">🖨 PDF herunterladen</button>
+  </div>
+  <div class="card">
+    <h3 style="color:#e53e3e">🗑 Alle Daten löschen</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:1rem">Alle Einträge aus Drive und App entfernen.</p>
+    <button class="btn btn-danger" onclick="alleLoeschen()">Alle Daten löschen</button>
+  </div>
+</div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const CLIENT_ID='639219212220-4ha8h892jrdkvlgikdsvt6b0vi4v6ph0.apps.googleusercontent.com';
+const SCOPES='https://www.googleapis.com/auth/drive.appdata';
+const FILE_NAME='gesundheit_tagebuch.json';
+const WT=['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+let daten=[],accessToken=null,fileId=null,tokenClient=null;
+
+function fmtDatum(iso){const[y,m,d]=iso.split('-');return`${d}.${m}.${y.slice(2)}`;}
+function fmtDatumWT(iso){const dt=new Date(iso+'T12:00:00');return`${WT[dt.getDay()]}, ${fmtDatum(iso)}`;}
+function jetzt(){const n=new Date();return{datum:n.toISOString().slice(0,10),uhrzeit:n.toTimeString().slice(0,5)};}
+
+function setAuthUI(state,email=''){
+  const login=document.getElementById('btn-login');
+  const sync=document.getElementById('btn-sync');
+  const logout=document.getElementById('btn-logout');
+  const status=document.getElementById('auth-status');
+  if(state==='ready'){
+    login.style.display='inline-flex';sync.style.display='none';logout.style.display='none';
+    status.innerHTML='☁ Nicht angemeldet';
+  }else if(state==='loggedin'){
+    login.style.display='none';sync.style.display='inline-flex';logout.style.display='inline-flex';
+    status.innerHTML=`✅ Angemeldet${email?' als <strong>'+email+'</strong>':''}`;
+  }else if(state==='error'){
+    login.style.display='none';
+    status.innerHTML='❌ Google API Fehler';
+  }
+}
+
+function googleLogin(){
+  if(!tokenClient){toast('Google API nicht bereit.');return;}
+  tokenClient.requestAccessToken();
+}
+
+function googleLogout(){
+  if(accessToken&&window.google)google.accounts.oauth2.revoke(accessToken,()=>{});
+  accessToken=null;fileId=null;daten=[];
+  setAuthUI('ready');render();toast('Abgemeldet.');
+}
+
+async function syncDrive(){
+  toast('Synchronisiere...');
+  await ladeVonDrive();render();
+}
+
+async function ladeVonDrive(){
+  try{
+    const res=await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=name%3D%22${FILE_NAME}%22`,
+      {headers:{Authorization:'Bearer '+accessToken}}
+    );
+    const json=await res.json();
+    if(json.files&&json.files.length>0){
+      fileId=json.files[0].id;
+      const content=await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {headers:{Authorization:'Bearer '+accessToken}}
+      );
+      daten=await content.json();
+      toast(daten.length+' Einträge aus Google Drive geladen.');
+    }else{
+      fileId=null;daten=[];
+      toast('Noch keine Daten in Drive. Bereit für erste Einträge.');
+    }
+  }catch(e){toast('Ladefehler: '+e.message);}
+}
+
+async function speichernAufDrive(){
+  if(!accessToken)return false;
+  const body=JSON.stringify(daten);
+  try{
+    if(fileId){
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{
+        method:'PATCH',
+        headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
+        body
+      });
+    }else{
+      const meta=JSON.stringify({name:FILE_NAME,parents:['appDataFolder']});
+      const form=new FormData();
+      form.append('metadata',new Blob([meta],{type:'application/json'}));
+      form.append('file',new Blob([body],{type:'application/json'}));
+      const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+        method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form
+      });
+      const j=await res.json();fileId=j.id;
+    }
+    return true;
+  }catch(e){toast('Drive-Fehler: '+e.message);return false;}
+}
+
+async function speichern(){
+  const datum=document.getElementById('f-datum').value;
+  const uhrzeit=document.getElementById('f-uhrzeit').value;
+  if(!datum||!uhrzeit){toast('Datum und Uhrzeit erforderlich.');return;}
+  const e={
+    id:Date.now(),datum,uhrzeit,
+    bpS:document.getElementById('f-bpS').value?parseFloat(document.getElementById('f-bpS').value):null,
+    bpD:document.getElementById('f-bpD').value?parseFloat(document.getElementById('f-bpD').value):null,
+    puls:document.getElementById('f-puls').value?parseFloat(document.getElementById('f-puls').value):null,
+    spo2:document.getElementById('f-spo2').value?parseFloat(document.getElementById('f-spo2').value):null,
+    temp:document.getElementById('f-temp').value?parseFloat(document.getElementById('f-temp').value):null,
+    stuhl:document.getElementById('f-stuhl').value||null,
+    notiz:document.getElementById('f-notiz').value||''
+  };
+  daten.unshift(e);
+  if(accessToken){
+    const ok=await speichernAufDrive();
+    toast(ok?'✅ Gespeichert und in Google Drive synchronisiert.':'⚠ Lokal gespeichert, Drive-Sync fehlgeschlagen.');
+  }else{
+    toast('⚠ Gespeichert (lokal). Bitte anmelden für Drive-Sync.');
+  }
+  felderLeeren();render();
+}
+
+function felderLeeren(){
+  const t=jetzt();
+  document.getElementById('f-datum').value=t.datum;
+  document.getElementById('f-uhrzeit').value=t.uhrzeit;
+  ['f-bpS','f-bpD','f-puls','f-spo2','f-temp','f-notiz'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-stuhl').value='';
+}
+
+function bewerteBP(s,d){
+  if(s===null&&d===null)return 'ok';
+  if((s!==null&&(s>180||s<90))||(d!==null&&(d>110||d<60)))return 'crit';
+  if((s!==null&&s>140)||(d!==null&&d>90))return 'warn';
+  return 'ok';
+}
+function bewertePuls(v){if(v===null)return 'ok';if(v>120||v<50)return 'crit';if(v>100||v<55)return 'warn';return 'ok';}
+function bewerteSpO2(v){if(v===null)return 'ok';if(v<90)return 'crit';if(v<94)return 'warn';return 'ok';}
+function bewerteTemp(v){if(v===null)return 'ok';if(v>39.5||v<35.5)return 'crit';if(v>37.5)return 'warn';return 'ok';}
+
+function badge(st,txt){return`<span class="badge ${st}">${txt}</span>`;}
+function fmtVal(v,unit,st){
+  if(v===null||v===undefined||v==='')return'<span style="color:#999">—</span>';
+  return badge(st,`${v}${unit}`);
+}
+function clr(st){return st==='ok'?'clr-ok':st==='warn'?'clr-warn':'clr-crit';}
+
+function gruppiertHTML(eintraege,mitLoeschen){
+  const gruppen={};
+  eintraege.forEach(e=>{if(!gruppen[e.datum])gruppen[e.datum]=[];gruppen[e.datum].push(e);});
+  const tage=Object.keys(gruppen).sort((a,b)=>b.localeCompare(a));
+  let rows='';
+  const cols=mitLoeschen?8:7;
+  tage.forEach(tag=>{
+    const te=gruppen[tag].sort((a,b)=>b.uhrzeit.localeCompare(a.uhrzeit));
+    rows+=`<tr class="day-header"><td colspan="${cols}">${fmtDatumWT(tag)} <span style="font-size:12px;font-weight:400;color:#666">(${te.length} Messung${te.length>1?'en':''})</span></td></tr>`;
+    te.forEach(e=>{
+      rows+=`<tr class="day-row">
+        <td>${e.uhrzeit}</td>
+        <td>${(e.bpS!==null||e.bpD!==null)?badge(bewerteBP(e.bpS,e.bpD),`${e.bpS??'?'}/${e.bpD??'?'}`):'<span style="color:#999">—</span>'}</td>
+        <td>${fmtVal(e.puls,' bpm',bewertePuls(e.puls))}</td>
+        <td>${fmtVal(e.spo2,'%',bewerteSpO2(e.spo2))}</td>
+        <td>${fmtVal(e.temp,'°C',bewerteTemp(e.temp))}</td>
+        <td>${e.stuhl?badge('ok',e.stuhl):'<span style="color:#999">—</span>'}</td>
+        <td style="color:#666;font-size:12px">${e.notiz||''}</td>
+        ${mitLoeschen?`<td><button class="btn" style="padding:4px 8px;font-size:12px" onclick="loescheEintrag(${e.id})">🗑</button></td>`:''}
+      </tr>`;
+    });
+  });
+  return rows;
+}
+
+function render(){renderLetzte();renderVerlauf();}
+
+function renderLetzte(){
+  const el=document.getElementById('letzte-eintraege');
+  if(daten.length===0){el.innerHTML='';return;}
+  const sorted=[...daten].sort((a,b)=>(b.datum+b.uhrzeit).localeCompare(a.datum+a.uhrzeit));
+  const tage=[...new Set(sorted.map(e=>e.datum))].slice(0,3);
+  const recent=sorted.filter(e=>tage.includes(e.datum));
+  el.innerHTML=`<div class="card"><h3>Letzte Einträge</h3><div class="table-wrap"><table>
+    <thead><tr><th>Uhrzeit</th><th>RR sys/dia</th><th>Puls</th><th>SpO₂</th><th>Temp</th><th>Stuhlgang</th><th>Notiz</th><th></th></tr></thead>
+    <tbody>${gruppiertHTML(recent,true)}</tbody>
+  </table></div></div>`;
+}
+
+function setRange(days){
+  const bis=new Date();
+  document.getElementById('v-bis').value=bis.toISOString().slice(0,10);
+  if(days===0){document.getElementById('v-von').value='';}
+  else{const von=new Date();von.setDate(von.getDate()-days+1);document.getElementById('v-von').value=von.toISOString().slice(0,10);}
+  renderVerlauf();
+}
+
+function renderVerlauf(){
+  const el=document.getElementById('verlauf-inhalt');
+  if(daten.length===0){el.innerHTML='<div class="empty">Noch keine Daten geladen.</div>';return;}
+  const vonVal=document.getElementById('v-von').value;
+  const bisVal=document.getElementById('v-bis').value;
+  let src=daten;
+  if(vonVal)src=src.filter(e=>e.datum>=vonVal);
+  if(bisVal)src=src.filter(e=>e.datum<=bisVal);
+  if(src.length===0){el.innerHTML='<div class="empty">Keine Einträge im gewählten Zeitraum.</div>';return;}
+  const avgOf=key=>{const v=src.map(e=>e[key]).filter(x=>x!==null&&x!==undefined);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):null;};
+  const aS=avgOf('bpS'),aD=avgOf('bpD'),aP=avgOf('puls'),aO=avgOf('spo2'),aT=avgOf('temp');
+  el.innerHTML=`
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Ø RR sys</div><div class="stat-val ${clr(bewerteBP(aS?+aS:null,null))}">${aS??'—'}</div></div>
+      <div class="stat"><div class="stat-label">Ø RR dia</div><div class="stat-val ${clr(bewerteBP(null,aD?+aD:null))}">${aD??'—'}</div></div>
+      <div class="stat"><div class="stat-label">Ø Puls</div><div class="stat-val ${clr(bewertePuls(aP?+aP:null))}">${aP??'—'}</div></div>
+      <div class="stat"><div class="stat-label">Ø SpO₂</div><div class="stat-val ${clr(bewerteSpO2(aO?+aO:null))}">${aO??'—'}%</div></div>
+      <div class="stat"><div class="stat-label">Ø Temp</div><div class="stat-val ${clr(bewerteTemp(aT?+aT:null))}">${aT??'—'}°C</div></div>
+    </div>
+    <div class="card"><h3>${vonVal?fmtDatum(vonVal):'Anfang'} – ${bisVal?fmtDatum(bisVal):'heute'} <span style="font-size:13px;font-weight:400;color:#666">(${src.length} Einträge)</span></h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Uhrzeit</th><th>RR sys/dia</th><th>Puls</th><th>SpO₂</th><th>Temp</th><th>Stuhlgang</th><th>Notiz</th></tr></thead>
+      <tbody>${gruppiertHTML(src,false)}</tbody>
+    </table></div></div>`;
+}
+
+function showTab(name,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  el.classList.add('active');
+}
+
+function exportCSV(){
+  if(daten.length===0){toast('Keine Daten.');return;}
+  const sorted=[...daten].sort((a,b)=>(a.datum+a.uhrzeit).localeCompare(b.datum+b.uhrzeit));
+  const h=['Datum','Wochentag','Uhrzeit','RR sys (mmHg)','RR dia (mmHg)','Puls (bpm)','SpO2 (%)','Temp (C)','Stuhlgang','Notiz'];
+  const rows=sorted.map(e=>{const dt=new Date(e.datum+'T12:00:00');return[fmtDatum(e.datum),WT[dt.getDay()],e.uhrzeit,e.bpS??'',e.bpD??'',e.puls??'',e.spo2??'',e.temp??'',e.stuhl??'',e.notiz??''];});
+  const csv=[h,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='gesundheitsdaten.csv';a.click();
+  URL.revokeObjectURL(url);toast('CSV wird heruntergeladen.');
+}
+
+function exportPDF(){
+  if(daten.length===0){toast('Keine Daten.');return;}
+  try{
+    const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    doc.setFontSize(14);doc.text('Gesundheitstagebuch',14,14);
+    doc.setFontSize(9);doc.text('Erstellt: '+new Date().toLocaleString('de-DE'),14,20);
+    const sorted=[...daten].sort((a,b)=>(a.datum+a.uhrzeit).localeCompare(b.datum+b.uhrzeit));
+    const cols=['Uhrzeit','RR sys','RR dia','Puls','SpO2%','Temp°C','Stuhlgang','Notiz'];
+    const cw=[16,14,14,12,12,14,14,55];
+    let y=28,lastDatum='';
+    doc.setFillColor(220,220,220);doc.rect(14,y-5,267,7,'F');
+    doc.setFontSize(8);doc.setFont(undefined,'bold');
+    let x=24;cols.forEach((c,i)=>{doc.text(c,x,y);x+=cw[i];});
+    y+=5;doc.setFont(undefined,'normal');
+    sorted.forEach(e=>{
+      if(y>190){doc.addPage();y=20;}
+      if(e.datum!==lastDatum){
+        doc.setFillColor(240,240,240);doc.rect(14,y-4,267,6,'F');
+        doc.setFont(undefined,'bold');doc.text(fmtDatumWT(e.datum),14,y);
+        doc.setFont(undefined,'normal');lastDatum=e.datum;y+=7;
+        if(y>190){doc.addPage();y=20;}
+      }
+      x=24;
+      [e.uhrzeit,e.bpS??'',e.bpD??'',e.puls??'',e.spo2??'',e.temp??'',e.stuhl??'',e.notiz??''].forEach((v,i)=>{doc.text(String(v),x,y);x+=cw[i];});
+      y+=6;
+    });
+    doc.save('gesundheitsdaten.pdf');toast('PDF wird heruntergeladen.');
+  }catch(e){toast('PDF-Fehler: '+e.message);}
+}
+
+async function loescheEintrag(id){
+  daten=daten.filter(e=>e.id!==id);
+  if(accessToken)await speichernAufDrive();
+  render();toast('Eintrag gelöscht.');
+}
+
+async function alleLoeschen(){
+  if(!confirm('Wirklich alle Daten löschen?'))return;
+  daten=[];fileId=null;
+  if(accessToken)await speichernAufDrive();
+  render();toast('Alle Daten gelöscht.');
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+window.addEventListener('load',()=>{
+  setTimeout(()=>{
+    if(window.google&&google.accounts&&google.accounts.oauth2){
+      tokenClient=google.accounts.oauth2.initTokenClient({
+        client_id:CLIENT_ID,
+        scope:SCOPES,
+        callback:async(resp)=>{
+          if(resp.error){toast('Anmeldefehler: '+resp.error);return;}
+          accessToken=resp.access_token;
+          setAuthUI('loggedin');
+          await ladeVonDrive();
+          render();
+        }
+      });
+      setAuthUI('ready');
+    }else{
+      setAuthUI('error');
+    }
+  },1000);
+});
+
+const t=jetzt();
+document.getElementById('f-datum').value=t.datum;
+document.getElementById('f-uhrzeit').value=t.uhrzeit;
+setRange(7);
+</script>
+</body>
+</html>
