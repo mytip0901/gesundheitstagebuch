@@ -453,8 +453,8 @@ function exportPDF(){
     if(src.length===0){toast('Keine Einträge im gewählten Zeitraum.');return;}
 
     const sorted=[...src].sort((a,b)=>a.datum.localeCompare(b.datum)||a.uhrzeit.localeCompare(b.uhrzeit));
-    const cols=['Uhrzeit','RR sys','RR dia','Puls','SpO2%','Temp°C','Stuhlgang','Notiz'];
-    const cx=[24,40,54,68,80,92,106,120];
+    const cols=['Uhrzeit','RR sys','RR dia','Puls','SpO2%','Temp C','Stuhlgang','Notiz'];
+    const cx=[24,40,58,74,86,98,112,126];
     const pageW=297,pageH=210,mL=14,mR=14;
 
     // Farbwerte für PDF
@@ -469,15 +469,18 @@ function exportPDF(){
       doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(30,30,30);
       doc.text('Gesundheitstagebuch',mL,10);
       if(name){doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text('Patient: '+name,mL,17);}
-      doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(100,100,100);
-      const zeitraum=(vonVal||bisVal)?`Zeitraum: ${vonVal?fmtDatum(vonVal):'Anfang'} – ${bisVal?fmtDatum(bisVal):'heute'}`:'Alle Einträge';
+      doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(80,80,80);
+      const zeitraum=(vonVal||bisVal)?'Zeitraum: '+(vonVal?fmtDatum(vonVal):'Anfang')+' - '+(bisVal?fmtDatum(bisVal):'heute'):'Alle Eintraege';
       doc.text(zeitraum,pageW/2,10,{align:'center'});
       doc.text('Erstellt: '+erstellt,pageW-mR,10,{align:'right'});
       doc.text('Seite '+doc.internal.getCurrentPageInfo().pageNumber,pageW-mR,17,{align:'right'});
-      // Legende
-      doc.setTextColor(40,167,69);doc.text('■ Normal',mL+100,17);
-      doc.setTextColor(200,150,0);doc.text('■ Erhöht',mL+120,17);
-      doc.setTextColor(220,53,69);doc.text('■ Kritisch',mL+140,17);
+      // Legende ohne Sonderzeichen
+      doc.setTextColor(40,150,60);doc.text('Normal',mL+100,17);
+      doc.setDrawColor(40,150,60);doc.rect(mL+96,13,3,3,'F');
+      doc.setTextColor(180,130,0);doc.text('Erhoht',mL+120,17);
+      doc.setFillColor(180,130,0);doc.rect(mL+116,13,3,3,'F');
+      doc.setTextColor(200,50,50);doc.text('Kritisch',mL+140,17);
+      doc.setFillColor(200,50,50);doc.rect(mL+136,13,3,3,'F');
       doc.setTextColor(30,30,30);
       // Trennlinie
       doc.setDrawColor(200,200,200);doc.line(mL,23,pageW-mR,23);
@@ -516,14 +519,17 @@ function exportPDF(){
 
       doc.setTextColor(30,30,30);doc.text(e.uhrzeit,cx[0],y);
 
-      // RR
-      if(e.bpS!==null||e.bpD!==null){
+      // RR sys
+      if(e.bpS!==null){
         const c=pdfColor(bpSt);doc.setTextColor(...c);
-        doc.text(`${e.bpS??'?'}/${e.bpD??'?'}`,cx[1],y);
-      }else{doc.setTextColor(150,150,150);doc.text('—',cx[1],y);}
+        doc.text(String(e.bpS),cx[1],y);
+      }else{doc.setTextColor(150,150,150);doc.text('--',cx[1],y);}
 
-      // RR dia (gleiche Farbe)
-      doc.setTextColor(30,30,30);doc.text('',cx[2],y);
+      // RR dia
+      if(e.bpD!==null){
+        const c=pdfColor(bpSt);doc.setTextColor(...c);
+        doc.text(String(e.bpD),cx[2],y);
+      }else{doc.setTextColor(150,150,150);doc.text('--',cx[2],y);}
 
       // Puls
       if(e.puls!==null){const c=pdfColor(pulsSt);doc.setTextColor(...c);doc.text(String(e.puls),cx[3],y);}
