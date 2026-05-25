@@ -151,9 +151,18 @@ tr:last-child td{border-bottom:none}
     <button class="btn btn-primary" onclick="exportPDF()">🖨 PDF herunterladen</button>
   </div>
   <div class="card">
+    <h3>💾 JSON-Backup</h3>
+    <p style="font-size:14px;color:#666;margin-bottom:1rem">Alle Einträge als JSON-Datei herunterladen — als Sicherungskopie.</p>
+    <button class="btn btn-primary" onclick="exportJSON()">⬇ JSON herunterladen</button>
+  </div>
+  <div class="card" style="border-color:#e53e3e">
     <h3 style="color:#e53e3e">🗑 Alle Daten löschen</h3>
-    <p style="font-size:14px;color:#666;margin-bottom:1rem">Alle Einträge aus Drive und App entfernen.</p>
-    <button class="btn btn-danger" onclick="alleLoeschen()">Alle Daten löschen</button>
+    <p style="font-size:14px;color:#666;margin-bottom:.75rem">Alle Einträge aus Drive und App unwiderruflich entfernen.</p>
+    <p style="font-size:13px;color:#e53e3e;margin-bottom:.75rem">Zur Bestätigung bitte <strong>LOESCHEN</strong> eintippen:</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="delete-confirm" placeholder="LOESCHEN" style="padding:8px 10px;border:1px solid #e53e3e;border-radius:8px;font-size:14px;width:160px">
+      <button class="btn btn-danger" onclick="alleLoeschen()">Alle Daten löschen</button>
+    </div>
   </div>
 </div>
 
@@ -567,10 +576,26 @@ async function loescheEintrag(id){
   render();toast('Eintrag gelöscht.');
 }
 
+function exportJSON(){
+  if(daten.length===0){toast('Keine Daten.');return;}
+  const heute=new Date().toISOString().slice(0,10);
+  const blob=new Blob([JSON.stringify(daten,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`gesundheit_backup_${heute}.json`;a.click();
+  URL.revokeObjectURL(url);
+  toast('JSON-Backup wird heruntergeladen.');
+}
+
 async function alleLoeschen(){
-  if(!confirm('Wirklich alle Daten löschen?'))return;
+  const val=document.getElementById('delete-confirm').value.trim();
+  if(val!=='LOESCHEN'){
+    toast('Bitte "LOESCHEN" eintippen um zu bestätigen.');
+    return;
+  }
   daten=[];fileId=null;
   if(accessToken)await speichernAufDrive();
+  document.getElementById('delete-confirm').value='';
   render();toast('Alle Daten gelöscht.');
 }
 
