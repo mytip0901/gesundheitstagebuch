@@ -143,7 +143,11 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="card">
     <h3>📄 PDF-Export</h3>
-    <p style="font-size:14px;color:#666;margin-bottom:1rem">Druckfähige Übersicht aller Messwerte.</p>
+    <div class="form-grid" style="margin-bottom:1rem">
+      <div class="field"><label>Name</label><input type="text" id="pdf-name" placeholder="Vor- und Nachname"></div>
+      <div class="field"><label>Von</label><input type="date" id="pdf-von"></div>
+      <div class="field"><label>Bis</label><input type="date" id="pdf-bis"></div>
+    </div>
     <button class="btn btn-primary" onclick="exportPDF()">🖨 PDF herunterladen</button>
   </div>
   <div class="card">
@@ -439,29 +443,115 @@ function exportPDF(){
   try{
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
-    doc.setFontSize(14);doc.text('Gesundheitstagebuch',14,14);
-    doc.setFontSize(9);doc.text('Erstellt: '+new Date().toLocaleString('de-DE'),14,20);
-    const sorted=[...daten].sort((a,b)=>a.datum.localeCompare(b.datum)||a.uhrzeit.localeCompare(b.uhrzeit));
+    const name=document.getElementById('pdf-name').value.trim()||'';
+    const vonVal=document.getElementById('pdf-von').value;
+    const bisVal=document.getElementById('pdf-bis').value;
+
+    let src=daten;
+    if(vonVal)src=src.filter(e=>e.datum>=vonVal);
+    if(bisVal)src=src.filter(e=>e.datum<=bisVal);
+    if(src.length===0){toast('Keine Einträge im gewählten Zeitraum.');return;}
+
+    const sorted=[...src].sort((a,b)=>a.datum.localeCompare(b.datum)||a.uhrzeit.localeCompare(b.uhrzeit));
     const cols=['Uhrzeit','RR sys','RR dia','Puls','SpO2%','Temp°C','Stuhlgang','Notiz'];
-    const cw=[16,14,14,12,12,14,14,55];
-    let y=28,lastDatum='';
-    doc.setFillColor(220,220,220);doc.rect(14,y-5,267,7,'F');
-    doc.setFontSize(8);doc.setFont(undefined,'bold');
-    let x=24;cols.forEach((c,i)=>{doc.text(c,x,y);x+=cw[i];});
-    y+=5;doc.setFont(undefined,'normal');
+    const cx=[24,40,54,68,80,92,106,120];
+    const pageW=297,pageH=210,mL=14,mR=14;
+
+    // Farbwerte für PDF
+    function pdfColor(st){
+      if(st==='crit')return[220,53,69];
+      if(st==='warn')return[255,193,7];
+      return[40,167,69];
+    }
+
+    function drawHeader(doc,name,vonVal,bisVal,erstellt){
+      doc.setFillColor(240,240,240);doc.rect(0,0,pageW,22,'F');
+      doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(30,30,30);
+      doc.text('Gesundheitstagebuch',mL,10);
+      if(name){doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text('Patient: '+name,mL,17);}
+      doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(100,100,100);
+      const zeitraum=(vonVal||bisVal)?`Zeitraum: ${vonVal?fmtDatum(vonVal):'Anfang'} – ${bisVal?fmtDatum(bisVal):'heute'}`:'Alle Einträge';
+      doc.text(zeitraum,pageW/2,10,{align:'center'});
+      doc.text('Erstellt: '+erstellt,pageW-mR,10,{align:'right'});
+      doc.text('Seite '+doc.internal.getCurrentPageInfo().pageNumber,pageW-mR,17,{align:'right'});
+      // Legende
+      doc.setTextColor(40,167,69);doc.text('■ Normal',mL+100,17);
+      doc.setTextColor(200,150,0);doc.text('■ Erhöht',mL+120,17);
+      doc.setTextColor(220,53,69);doc.text('■ Kritisch',mL+140,17);
+      doc.setTextColor(30,30,30);
+      // Trennlinie
+      doc.setDrawColor(200,200,200);doc.line(mL,23,pageW-mR,23);
+      // Spaltenköpfe
+      doc.setFillColor(220,220,220);doc.rect(mL,24,pageW-mL-mR,7,'F');
+      doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(50,50,50);
+      cx.forEach((x,i)=>doc.text(cols[i],x,29.5));
+      doc.setFont(undefined,'normal');doc.setTextColor(30,30,30);
+    }
+
+    const erstellt=new Date().toLocaleString('de-DE');
+    drawHeader(doc,name,vonVal,bisVal,erstellt);
+    let y=36,lastDatum='';
+
     sorted.forEach(e=>{
-      if(y>190){doc.addPage();y=20;}
-      if(e.datum!==lastDatum){
-        doc.setFillColor(240,240,240);doc.rect(14,y-4,267,6,'F');
-        doc.setFont(undefined,'bold');doc.text(fmtDatumWT(e.datum),14,y);
-        doc.setFont(undefined,'normal');lastDatum=e.datum;y+=7;
-        if(y>190){doc.addPage();y=20;}
+      if(y>195){
+        doc.addPage();
+        drawHeader(doc,name,vonVal,bisVal,erstellt);
+        y=36;lastDatum='';
       }
-      x=24;
-      [e.uhrzeit,e.bpS??'',e.bpD??'',e.puls??'',e.spo2??'',e.temp??'',e.stuhl??'',e.notiz??''].forEach((v,i)=>{doc.text(String(v),x,y);x+=cw[i];});
-      y+=6;
+      if(e.datum!==lastDatum){
+        if(y>188){doc.addPage();drawHeader(doc,name,vonVal,bisVal,erstellt);y=36;}
+        doc.setFillColor(245,245,245);doc.rect(mL,y-4,pageW-mL-mR,6,'F');
+        doc.setFont(undefined,'bold');doc.setFontSize(8.5);doc.setTextColor(30,30,30);
+        doc.text(fmtDatumWT(e.datum),mL,y);
+        doc.setFont(undefined,'normal');doc.setFontSize(8);
+        lastDatum=e.datum;y+=7;
+        if(y>195){doc.addPage();drawHeader(doc,name,vonVal,bisVal,erstellt);y=36;lastDatum='';}
+      }
+
+      // Zeile mit Farben
+      const bpSt=bewerteBP(e.bpS,e.bpD);
+      const pulsSt=bewertePuls(e.puls);
+      const spo2St=bewerteSpO2(e.spo2);
+      const tempSt=bewerteTemp(e.temp);
+
+      doc.setTextColor(30,30,30);doc.text(e.uhrzeit,cx[0],y);
+
+      // RR
+      if(e.bpS!==null||e.bpD!==null){
+        const c=pdfColor(bpSt);doc.setTextColor(...c);
+        doc.text(`${e.bpS??'?'}/${e.bpD??'?'}`,cx[1],y);
+      }else{doc.setTextColor(150,150,150);doc.text('—',cx[1],y);}
+
+      // RR dia (gleiche Farbe)
+      doc.setTextColor(30,30,30);doc.text('',cx[2],y);
+
+      // Puls
+      if(e.puls!==null){const c=pdfColor(pulsSt);doc.setTextColor(...c);doc.text(String(e.puls),cx[3],y);}
+      else{doc.setTextColor(150,150,150);doc.text('—',cx[3],y);}
+
+      // SpO2
+      if(e.spo2!==null){const c=pdfColor(spo2St);doc.setTextColor(...c);doc.text(String(e.spo2)+'%',cx[4],y);}
+      else{doc.setTextColor(150,150,150);doc.text('—',cx[4],y);}
+
+      // Temp
+      if(e.temp!==null){const c=pdfColor(tempSt);doc.setTextColor(...c);doc.text(String(e.temp)+'°C',cx[5],y);}
+      else{doc.setTextColor(150,150,150);doc.text('—',cx[5],y);}
+
+      // Stuhlgang & Notiz
+      doc.setTextColor(30,30,30);
+      doc.text(e.stuhl||'—',cx[6],y);
+      if(e.notiz){
+        const notiz=e.notiz.length>30?e.notiz.slice(0,28)+'…':e.notiz;
+        doc.text(notiz,cx[7],y);
+      }
+
+      doc.setDrawColor(230,230,230);doc.line(mL,y+2,pageW-mR,y+2);
+      y+=7;
     });
-    doc.save('gesundheitsdaten.pdf');toast('PDF wird heruntergeladen.');
+
+    const dateiname=`gesundheit_${vonVal||'alle'}_${bisVal||'heute'}.pdf`;
+    doc.save(dateiname);
+    toast('PDF wird heruntergeladen.');
   }catch(e){toast('PDF-Fehler: '+e.message);}
 }
 
