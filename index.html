@@ -528,40 +528,52 @@ function exportPDF(){
 
       doc.setTextColor(30,30,30);doc.text(e.uhrzeit,cx[0],y);
 
-      // RR sys
-      if(e.bpS!==null){
-        const c=pdfColor(bpSt);doc.setTextColor(...c);
-        doc.text(String(e.bpS),cx[1],y);
-      }else{doc.setTextColor(150,150,150);doc.text('--',cx[1],y);}
-
-      // RR dia
-      if(e.bpD!==null){
-        const c=pdfColor(bpSt);doc.setTextColor(...c);
-        doc.text(String(e.bpD),cx[2],y);
-      }else{doc.setTextColor(150,150,150);doc.text('--',cx[2],y);}
-
-      // Puls
-      if(e.puls!==null){const c=pdfColor(pulsSt);doc.setTextColor(...c);doc.text(String(e.puls),cx[3],y);}
-      else{doc.setTextColor(150,150,150);doc.text('—',cx[3],y);}
-
-      // SpO2
-      if(e.spo2!==null){const c=pdfColor(spo2St);doc.setTextColor(...c);doc.text(String(e.spo2)+'%',cx[4],y);}
-      else{doc.setTextColor(150,150,150);doc.text('—',cx[4],y);}
-
-      // Temp
-      if(e.temp!==null){const c=pdfColor(tempSt);doc.setTextColor(...c);doc.text(String(e.temp)+'°C',cx[5],y);}
-      else{doc.setTextColor(150,150,150);doc.text('—',cx[5],y);}
-
-      // Stuhlgang & Notiz
-      doc.setTextColor(30,30,30);
-      doc.text(e.stuhl||'—',cx[6],y);
-      if(e.notiz){
-        const notiz=e.notiz.length>30?e.notiz.slice(0,28)+'…':e.notiz;
-        doc.text(notiz,cx[7],y);
+      // Hilfsfunktion: Badge mit Hintergrund zeichnen
+      function drawBadge(text,x,yy,st){
+        if(st==='ok'){doc.setFillColor(212,237,218);doc.setTextColor(21,87,36);}
+        else if(st==='warn'){doc.setFillColor(255,243,205);doc.setTextColor(133,100,4);}
+        else{doc.setFillColor(248,215,218);doc.setTextColor(114,28,36);}
+        const w=doc.getTextWidth(text)+4;
+        doc.rect(x-1,yy-4,w,5,'F');
+        doc.text(text,x,yy);
+        doc.setTextColor(30,30,30);
       }
 
-      doc.setDrawColor(230,230,230);doc.line(mL,y+2,pageW-mR,y+2);
-      y+=7;
+      // RR sys
+      if(e.bpS!==null){drawBadge(String(e.bpS),cx[1],y,bpSt);}
+      else{doc.setTextColor(150,150,150);doc.text('--',cx[1],y);doc.setTextColor(30,30,30);}
+
+      // RR dia
+      if(e.bpD!==null){drawBadge(String(e.bpD),cx[2],y,bpSt);}
+      else{doc.setTextColor(150,150,150);doc.text('--',cx[2],y);doc.setTextColor(30,30,30);}
+
+      // Puls
+      if(e.puls!==null){drawBadge(String(e.puls),cx[3],y,pulsSt);}
+      else{doc.setTextColor(150,150,150);doc.text('--',cx[3],y);doc.setTextColor(30,30,30);}
+
+      // SpO2
+      if(e.spo2!==null){drawBadge(String(e.spo2)+'%',cx[4],y,spo2St);}
+      else{doc.setTextColor(150,150,150);doc.text('--',cx[4],y);doc.setTextColor(30,30,30);}
+
+      // Temp
+      if(e.temp!==null){drawBadge(String(e.temp)+'C',cx[5],y,tempSt);}
+      else{doc.setTextColor(150,150,150);doc.text('--',cx[5],y);doc.setTextColor(30,30,30);}
+
+      // Stuhlgang
+      doc.setTextColor(30,30,30);
+      doc.text(e.stuhl||'--',cx[6],y);
+
+      // Notiz mit Zeilenumbruch
+      let zeilenhoehe=7;
+      if(e.notiz){
+        const maxBreite=pageW-mR-cx[7];
+        const zeilen=doc.splitTextToSize(e.notiz,maxBreite);
+        doc.text(zeilen,cx[7],y);
+        if(zeilen.length>1)zeilenhoehe=5+zeilen.length*4.5;
+      }
+
+      doc.setDrawColor(230,230,230);doc.line(mL,y+zeilenhoehe-3,pageW-mR,y+zeilenhoehe-3);
+      y+=zeilenhoehe;
     });
 
     const dateiname=`gesundheit_${vonVal||'alle'}_${bisVal||'heute'}.pdf`;
